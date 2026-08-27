@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>椅子取りゲーム・ランダム音楽</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:#111827;color:#fff;min-height:100vh}
+main{max-width:720px;margin:auto;padding:20px 16px 40px}.card{background:#1f2937;border-radius:20px;padding:20px;margin:14px 0}
+h1{font-size:24px;margin:4px 0 8px} h2{font-size:18px;margin:0 0 14px}
+label{display:block;margin:12px 0 6px;font-weight:700}.row{display:flex;gap:10px;align-items:center}.row>*{flex:1}
+input{width:100%;padding:13px;border-radius:12px;border:1px solid #4b5563;background:#111827;color:#fff;font-size:16px}
+button{border:0;border-radius:14px;padding:15px 18px;font-size:17px;font-weight:800;cursor:pointer;background:#374151;color:#fff}
+button.primary{background:#16a34a}.stop{background:#dc2626!important}.big{width:100%;min-height:72px;font-size:22px;margin-top:10px}
+#status{text-align:center;font-size:30px;font-weight:900;padding:18px 8px;min-height:80px}
+#player{width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden}
+.small{font-size:13px;color:#cbd5e1;line-height:1.6}.danger{color:#fecaca}
+.hidden{display:none}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.settings-grid{grid-template-columns:1fr}.row{flex-direction:column}.row>*{width:100%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>🪑 椅子取りゲーム</h1>
+  <div class="card">
+    <div id="status">準備OK</div>
+    <div id="player"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="start" class="primary">▶ ゲーム開始</button>
+      <button id="resume">▶ 再開</button>
+      <button id="end" class="stop">■ 終了</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ ゲーム設定</h2>
+    <div class="settings-grid">
+      <div><label>最短再生（秒）</label><input id="minSec" type="number" min="5" value="20"></div>
+      <div><label>最長再生（秒）</label><input id="maxSec" type="number" min="6" value="90"></div>
+    </div>
+    <label>YouTube動画URL</label>
+    <input id="url" placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX">
+    <p class="small">※ ゲーム中は次に止まる時刻を表示しません。毎回、設定範囲内からランダムに決定します。</p>
+  </div>
+
+  <div class="card">
+    <h2>🔒 予測防止</h2>
+    <p class="small">停止時刻はゲーム開始後にアプリ内部で決定し、画面にはカウントダウンを表示しません。再開後も毎回別の停止時刻を抽選します。</p>
+  </div>
+</main>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+let player=null, timer=null, state="idle", lastDuration=null;
+
+function getVideoId(url){
+  try{
+    const u=new URL(url);
+    if(u.hostname.includes("youtu.be")) return u.pathname.slice(1).split("/")[0];
+    if(u.searchParams.get("v")) return u.searchParams.get("v");
+    const m=u.pathname.match(/\\/shorts\\/([^/]+)/);
+    return m ? m[1] : null;
+  }catch(e){return null}
+}
+function setStatus(t){document.getElementById("status").textContent=t}
+function randInt(a,b){
+  return Math.floor(Math.random()*(b-a+1))+a;
+}
+function scheduleStop(){
+  clearTimeout(timer);
+  const min=Math.max(5,parseInt(document.getElementById("minSec").value)||20);
+  const max=Math.max(min,parseInt(document.getElementById("maxSec").value)||90);
+  let d=randInt(min,max);
+  // 同じ秒数の連続を避け、予測材料を減らす
+  if(lastDuration!==null && max-min>=2 && d===lastDuration){
+    d = d<max ? d+1 : d-1;
+  }
+  lastDuration=d;
+  timer=setTimeout(stopMusic,d*1000);
+}
+function stopMusic(){
+  if(state!=="playing") return;
+  state="stopped";
+  player.pauseVideo();
+  setStatus("🛑 STOP!");
+}
+function startGame(){
+  const id=getVideoId(document.getElementById("url").value.trim());
+  if(!id){alert("YouTube動画URLを入力してください。");return}
+  if(!player){alert("YouTubeプレイヤーの読み込み中です。数秒待ってからもう一度押してください。");return}
+  clearTimeout(timer);
+  lastDuration=null;
+  state="playing";
+  setStatus("🎵 再生中…");
+  player.loadVideoById(id);
+  scheduleStop();
+}
+function resumeGame(){
+  if(!player || state==="idle"){return}
+  clearTimeout(timer);
+  state="playing";
+  setStatus("🎵 再生中…");
+  player.playVideo();
+  scheduleStop();
+}
+function endGame(){
+  clearTimeout(timer);
+  state="idle";
+  if(player) player.stopVideo();
+  setStatus("準備OK");
+}
+function onYouTubeIframeAPIReady(){
+  player=new YT.Player("player",{
+    height:"100%",width:"100%",videoId:"",
+    playerVars:{playsinline:1,controls:1,rel:0},
+    events:{onReady:()=>setStatus("準備OK")}
+  });
+}
+document.getElementById("start").onclick=startGame;
+document.getElementById("resume").onclick=resumeGame;
+document.getElementById("end").onclick=endGame;
+</script>
+</body>
+</html>
